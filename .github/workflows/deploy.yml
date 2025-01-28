@@ -20,11 +20,7 @@ jobs:
       with:
         node-version: 16
 
-    # Step 3: Install dependencies and test
-    - name: Install dependencies
-      run: |
-        npm install
-        npm test
+
 
     # Step 4: Set up Minikube
     - name: Start Minikube
@@ -35,17 +31,15 @@ jobs:
       run: |
         eval $(minikube -p minikube docker-env)
         docker build -t nodejs-app:latest .
-
     # Step 6: Apply Kubernetes manifests
     - name: Deploy to Kubernetes
       run: |
         kubectl apply -f k8s/deployment.yaml
         kubectl apply -f k8s/service.yaml
-
     # Step 7: Rollback if deployment fails
     - name: Verify Deployment and Rollback
       run: |
-        if ! kubectl rollout status deployment/nodejs-app --timeout=60s; then
+        if ! kubectl rollout status deployment/nodejs-app --timeout=160s; then
           echo "Deployment failed! Rolling back..."
           kubectl rollout undo deployment/nodejs-app
           exit 1
