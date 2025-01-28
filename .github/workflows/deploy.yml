@@ -1,4 +1,4 @@
-name: Deploy to Minikube using GitHub Actions
+name: CI/CD Pipeline
 
 on:
   push:
@@ -6,38 +6,47 @@ on:
       - main
 
 jobs:
-  build-and-deploy:
+  build-test-deploy:
     runs-on: ubuntu-latest
-    environment: secrets
 
     steps:
-      # Checkout Code
-      - name: Checkout Code
-        uses: actions/checkout@v3
+    # Step 1: Checkout code
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-      # Start Minikube
-      - name: Start Minikube
-        uses: medyagh/setup-minikube@master
+    # Step 2: Set up Node.js environment
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 16
 
-      #  Try the Cluster
-      - name: Try the cluster!
-        run: kubectl get pods -A
+    # Step 3: Install dependencies and test
+    - name: Install dependencies
+      run: |
+        npm install
+        npm test
 
-      #  Build Docker Image
-      - name: Build Docker Image
-        run: |
-          export SHELL=/bin/bash
-          eval $(minikube -p minikube docker-env)
-          docker build -f ./Dockerfile -t sibichandran2001/node-app:latest .
-          echo -n "Verifying images:"
-          docker images
+    # Step 4: Set up Minikube
+    - name: Start Minikube
+      uses: medyagh/setup-minikube@master
 
-      #  Deploy to Minikube
-      - name: Deploy to Minikube
-        run: kubectl apply -f k8s/k8s-node-app.yaml
+    # Step 5: Build Docker image inside Minikube
+    - name: Build Docker image
+      run: |
+        eval $(minikube -p minikube docker-env)
+        docker build -t nodejs-app:latest .
 
-      # Test Service URLs
-      - name: Test Service URLs
-        run: |
-          minikube service list
-          minikube service nodejs-app --url
+    # Step 6: Apply Kubernetes manifests
+    - name: Deploy to Kubernetes
+      run: |
+        kubectl apply -f k8s/deployment.yaml
+        kubectl apply -f k8s/service.yaml
+
+    # Step 7: Rollback if deployment fails
+    - name: Verify Deployment and Rollback
+      run: |
+        if ! kubectl rollout status deployment/nodejs-app --timeout=60s; then
+          echo "Deployment failed! Rolling back..."
+          kubectl rollout undo deployment/nodejs-app
+          exit 1
+        fi
